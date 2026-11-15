@@ -1,0 +1,67 @@
+name: Live smoke validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/smoke.yml']
+permissions:
+  contents: read
+concurrency:
+  group: music-deals-live-smoke
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[test]'
+      - run: python -m pytest -q
+      - name: Define a bounded live scope
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          config=json.loads(Path('config/retailers.json').read_text())
+          retailer=next(r for r in config['retailers'] if r['id']=='proaudiostar')
+          retailer['seeds']=['/featured-deal.html']
+          config['retailers']=[retailer]
+          config['max_collections_per_retailer']=1
+          config['max_pages_per_collection']=5
+          config['delay_seconds']=3
+          Path('smoke-config.json').write_text(json.dumps(config))
+          PY
+      - name: Collect actual inventory
+        run: |
+          mkdir -p logs
+          set -o pipefail
+          timeout --signal=INT --kill-after=30s 10m python -u -m music_deals.cli collect --config smoke-config.json 2>&1 | tee logs/smoke.log
+      - name: Reconcile files and require actual data
+        run: |
+          python scripts/validate_outputs.py | tee reports/output_validation.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('reports/run_manifest.json').read_text())
+          assert result['unique_offers']>0, 'Live smoke collected no offers; inspect coverage'
+          PY
+      - name: Summary
+        if: always()
+        run: |
+          echo 'This is a bounded delivery test, not the full retailer inventory run.' >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f reports/executive_summary.md ]]; then cat reports/executive_summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-smoke-${{ github.run_id }}
+          path: |
+            reports/
+            data/deals.sqlite*
+            data/evidence/
+            logs/
+            smoke-config.json
+          retention-days: 30
+          if-no-files-found: warn
