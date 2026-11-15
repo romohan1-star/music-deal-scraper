@@ -34,11 +34,36 @@ def relevance(o):
     if re.search(r'4[ -]string.*bass|mustang.*bass|ray34|marcus miller v7|waza.air|maschine\+|juno|rokit',text): score=min(score,10); reasons.append('Substantial overlap with owned gear')
     if any(re.search(pattern,text,re.I) for pattern in PROFILE.get('owned_patterns',[])):
         score=min(score,5); reasons.append('Owned capability; replacement value not established')
+    if score>=95 and 'fretless' not in text and re.search(r'\bgio\b|\bgsr\d|\bjs series\b|action bass|\bray5(?:\b|[ -])',text):
+        score=45; reasons.append('Entry-level five-string option; upgrade value needs review')
+    if 'bass' in text and re.search(r'\bacoustic\b|\ba/e\b|\bauditorium\b',text):
+        score=min(score,45); reasons.append('Acoustic bass is secondary to electric-bass goals')
     if not PROFILE.get('allow_left_handed',False) and re.search(r'left[ -]hand(?:ed)?|\blefty\b',text):
         score=0; reasons.append('Left-handed instrument excluded from personal shortlist')
     if o.get('availability') in ('out_of_stock','https://schema.org/OutOfStock'): score=0; reasons.append('Out of stock')
     # Discounts only break ties; unverified compare-at cannot inflate ranking.
     return score,'; '.join(reasons)
+
+
+def select_shortlist(offers,limit=30):
+    candidates=sorted([o for o in offers if o['relevance_score']>=25 and o.get('verified_effective_price') is not None],key=lambda o:(-o['relevance_score'],-(o.get('discount_percentage') or 0),o['verified_effective_price'],o['offer_id']))
+    def group(o):
+        reason=o['relevance_reason']
+        if 'bass capability' in reason or 'Five-string bass' in reason: return 'bass'
+        if 'Unusual processing' in reason or 'Synthesis;' in reason: return 'effects'
+        if 'Rhythm and sampling' in reason or 'Expressive or MIDI' in reason: return 'rhythm_control'
+        if 'Recording/routing' in reason or 'Practice support' in reason: return 'recording_practice'
+        return 'guitar_other'
+    quotas=PROFILE.get('shortlist_category_limits',{'bass':10,'effects':8,'rhythm_control':5,'recording_practice':5,'guitar_other':2})
+    counts=Counter(); selected=[]; skipped=[]
+    for o in candidates:
+        category=group(o)
+        if len(selected)<limit and counts[category]<quotas.get(category,5): selected.append(o); counts[category]+=1
+        else: skipped.append(o)
+    # Fill unused places only with otherwise qualifying offers; never pad with
+    # accessories or owned effects to reach an arbitrary total.
+    selected.extend(skipped[:max(0,limit-len(selected))])
+    return selected
 
 
 def safe_cell(v):
@@ -55,7 +80,7 @@ def comparisons(offers):
     rows=[]
     for key,group in groups.items():
         if len({o['retailer'] for o in group})<2: continue
-        prices=[o['verified_effective_price'] for o in group if o['verified_effective_price'] is not None and o.get('availability') not in ('out_of_stock','https://schema.org/OutOfStock')]
+        prices=[o['verified_effective_price'] for o in group if o['verified_effective_price'] is not None and o.get('availability') in ('in_stock','https://schema.org/InStock','http://schema.org/InStock')]
         for o in group:
             rows.append({'match_basis':key[0],'match_status':'candidate_review_required' if key[0]=='exact_title_candidate' else 'identifier_match_with_variant_guards','title':o['product_title'],'retailer':o['retailer'],'condition':o['condition'],'currency':o['currency'],'price':o['verified_effective_price'],'lowest_observed_in_stock_price':min(prices) if prices else None,'product_url':o['product_url']})
     return rows
@@ -66,7 +91,7 @@ def export(store,run,out):
     offers=store.current(run)
     for o in offers: o['relevance_score'],o['relevance_reason']=relevance(o)
     offers.sort(key=lambda o:(o['retailer'],o['product_title'],o['offer_id']))
-    shortlist=sorted([o for o in offers if o['relevance_score']>=25 and o.get('verified_effective_price') is not None],key=lambda o:(-o['relevance_score'],-(o.get('discount_percentage') or 0),o['verified_effective_price']))[:30]
+    shortlist=select_shortlist(offers)
     coverage=store.coverage(run); comps=comparisons(offers)
     errors=[dict(x) for x in store.db.execute('SELECT retailer,url,stage,message,created_at FROM errors WHERE run_id=?',(run,))]
     checks=[dict(x) for x in store.db.execute('SELECT retailer,collection_url,source_url,check_type,status,detail FROM validations WHERE id IN (SELECT MAX(id) FROM validations WHERE run_id=? GROUP BY retailer,collection_url,source_url,check_type)',(run,))]
@@ -128,7 +153,7 @@ def export(store,run,out):
         counts=Counter(c['status'] for c in coverage if c['retailer']==retailer)
         summary.append(f'| {retailer} | {totals[retailer]} | '+', '.join(f'{n} {s}' for s,n in counts.items())+' |')
     summary+=['','Collection completeness never establishes retailer-wide completeness. See coverage.csv for counts, request/page totals, duplicate memberships, scope and reasons.','', '## Top personal candidates (up to 30)','',
-        'Ranked by capability relevance, then verified retailer-reference discount when available, then price. Unverified compare-at discounts do not improve the ranking. These are candidates to inspect, not instructions to buy.','', '| Product | Retailer | Price | Why review |','|---|---|---:|---|']
+        'Selected by capability relevance with category limits to cover basses, unusual effects, rhythm/control, recording/practice and guitar. Verified retailer-reference discount and price break ties. Unverified compare-at discounts do not improve the ranking. These are candidates to inspect, not instructions to buy.','', '| Product | Retailer | Price | Why review |','|---|---|---:|---|']
     for o in shortlist:
         title=o['product_title'].replace('|','/')
         summary.append(f"| [{title}]({o['product_url']}) | {o['retailer']} | {o.get('currency') or 'currency unverified'} {o['verified_effective_price']:,.2f} | {o['relevance_reason']} |")

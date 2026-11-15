@@ -1,5 +1,6 @@
 {
   "allow_left_handed": false,
+  "shortlist_category_limits": {"bass":10,"effects":8,"rhythm_control":5,"recording_practice":5,"guitar_other":2},
   "owned_patterns": [
     "marcus miller v7",
     "ray34",

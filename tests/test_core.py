@@ -7,7 +7,7 @@ from music_deals.http import Robots,Client,AccessBlocked
 from music_deals.store import Store
 from music_deals.collectors import ShopifyCollector,MagentoCollector
 from music_deals.pipeline import crawl_collection
-from music_deals.report import export,relevance,safe_cell
+from music_deals.report import export,relevance,safe_cell,select_shortlist,comparisons
 
 
 def test_money_missing_not_zero():
@@ -231,3 +231,20 @@ def test_unexpected_empty_pagination_page_is_failed(tmp_path):
     assert coverage['status']=='PARTIAL' and coverage['pages_failed']==1
     assert coverage['unique_listings']==1 and coverage['advertised_count']==2
     s.close()
+
+
+def test_shortlist_covers_interests_without_padding_accessories():
+    offers=[]
+    for i in range(50):
+        o={'offer_id':str(i),'product_title':('Premium 5-String Bass' if i<40 else 'Granular pedal'),'category':None,'verified_effective_price':100+i,'promotional_price':100+i,'discount_percentage':None}
+        o['relevance_score'],o['relevance_reason']=relevance(o); offers.append(o)
+    chosen=select_shortlist(offers)
+    assert len(chosen)==30
+    assert sum('Granular' in o['product_title'] for o in chosen)>=8
+    assert relevance({'product_title':'Fender Bass Strings (5-Strings)','category':None})[0]<25
+
+
+def test_comparison_does_not_call_unknown_stock_in_stock():
+    common={'brand':'Brand','product_title':'Same Model Red','condition':'new','currency':'USD','product_url':'https://r/p','variant':None,'bundle_contents':None}
+    rows=comparisons([common|{'retailer':'a','verified_effective_price':50,'availability':None},common|{'retailer':'b','verified_effective_price':100,'availability':'in_stock'}])
+    assert len(rows)==2 and all(r['lowest_observed_in_stock_price']==100 for r in rows)

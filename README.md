@@ -144,6 +144,9 @@ Relevance rules prioritize fretless/five-string bass, unusual effects, expressiv
 control, recording and practice. Conventional effects and clearly overlapping
 owned gear are demoted. `config/relevance.json` holds editable owned-gear patterns
 and handedness preference; left-handed instruments are excluded by default.
+Its category limits keep the 30-candidate list useful across basses, effects,
+rhythm/control and recording instead of filling it with low-priced bass variants.
+Entry-level five-string lines are demoted when upgrade value is unclear.
 The list is a set of candidates, not 30 forced purchases;
 price, condition, specifications and actual usefulness still need review.
 

@@ -7,14 +7,22 @@ import json
 import os
 from pathlib import Path,PurePosixPath
 import urllib.request
+from urllib.parse import urlsplit
 import zipfile
 
 
 def main():
     repo=os.environ['GITHUB_REPOSITORY']; token=os.environ['GH_TOKEN']
+    class SafeRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self,req,fp,code,msg,headers,newurl):
+            redirected=super().redirect_request(req,fp,code,msg,headers,newurl)
+            if redirected and urlsplit(req.full_url).netloc!=urlsplit(newurl).netloc:
+                redirected.remove_header('Authorization')
+            return redirected
+    opener=urllib.request.build_opener(SafeRedirect())
     def get(url):
         req=urllib.request.Request(url,headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
-        return urllib.request.urlopen(req,timeout=60).read()
+        return opener.open(req,timeout=60).read()
     payload=json.loads(get(f'https://api.github.com/repos/{repo}/actions/artifacts?per_page=100'))
     candidates=[a for a in payload['artifacts'] if a['name'].startswith('music-deals-') and not a['expired'] and a.get('workflow_run',{}).get('head_branch')=='main']
     if not candidates:
