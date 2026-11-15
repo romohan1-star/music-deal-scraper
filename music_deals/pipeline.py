@@ -121,10 +121,14 @@ def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples)
             if cached:
                 # Preserve the original pagination route within a resumed run.
                 parsed.next_urls=json.loads(old['next_json'] or '[]')
+            if index>1 and not parsed.offers and not parsed.next_urls and not parsed.terminal:
+                raise ValueError('Expected pagination page contains no supported listings or explicit end marker: '+url)
             for o in parsed.offers: o.collected_at=result['fetched_at']
             children.update(parsed.collections)
             if parsed.advertised_count is not None:
                 if count is not None and count!=parsed.advertised_count:
+                    if 'changed during pagination' not in reason:
+                        store.error(run,retailer,url,'count_drift',f'Advertised count changed from {count} to {parsed.advertised_count}')
                     failed=True; reason='Advertised count changed during pagination'
                 count=parsed.advertised_count; reliable=parsed.count_reliable
                 with store.db:
@@ -138,9 +142,9 @@ def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples)
             if any(u in visited for u in parsed.next_urls): raise ValueError('Pagination loops to an already visited page')
             queue.extend(parsed.next_urls)
             if not parsed.offers and not parsed.next_urls and not parsed.terminal:
-                reason=parsed.reason or 'No supported listing data or pagination found'
+                reason=reason or parsed.reason or 'No supported listing data or pagination found'
         except Exception as e:
-            failed=True; blocked=isinstance(e,AccessBlocked); reason=str(e)
+            failed=True; blocked=isinstance(e,AccessBlocked); reason=(reason+'; ' if reason else '')+str(e)
             store.save_page(run,retailer,collection,url,index,result or client.last_result,[],[],status='failed',error=str(e))
             store.error(run,retailer,url,'collection',str(e))
             break

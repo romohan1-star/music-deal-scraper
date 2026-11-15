@@ -218,3 +218,15 @@ def test_detail_validation_cannot_borrow_related_product_price(tmp_path):
     validate_samples(s,c,'run',{'id':'r'},'https://r/s',[o],1)
     assert s.db.execute('SELECT status FROM validations').fetchone()[0]=='FAIL'
     s.close()
+
+
+def test_unexpected_empty_pagination_page_is_failed(tmp_path):
+    s=Store(tmp_path/'db'); base='https://r/sale'; cfg={'id':'r','base':'https://r'}
+    html='''<p class="toolbar-amount">2 items</p><li class="product-item"><a class="product-item-link" href="/p">Bass</a><div data-product-id="1"></div><span data-price-type="finalPrice" data-price-amount="100"></span></li><div class="pages"><a class="next" href="?p=2">Next</a></div>'''
+    client=FixtureClient({base:html,base+'?p=2':'<html>Unexpected empty page</html>'},tmp_path)
+    s.collection('run','r',base)
+    crawl_collection(s,client,'run',cfg,MagentoCollector(cfg),base,10,0)
+    coverage=s.coverage('run')[0]
+    assert coverage['status']=='PARTIAL' and coverage['pages_failed']==1
+    assert coverage['unique_listings']==1 and coverage['advertised_count']==2
+    s.close()
