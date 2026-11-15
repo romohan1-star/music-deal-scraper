@@ -42,6 +42,7 @@ jobs:
         run: |
           python -m music_deals.cli export --run-id "$RUN_ID"
           mv reports-sample-audit.json reports/sample_audit.json
+          cp config/relevance.json reports/relevance_profile.json
           python scripts/validate_outputs.py | tee reports/output_validation.json
       - name: Summary
         if: always()
