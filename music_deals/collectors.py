@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 import json
 import re
-from urllib.parse import urljoin, urlsplit, parse_qs, urlencode, urlunsplit
+from urllib.parse import urljoin, urlsplit, parse_qs, urlencode, urlunsplit, unquote
 from bs4 import BeautifulSoup
 from .model import Offer, money, condition, canonical
 
@@ -26,6 +26,7 @@ def promo_links(soup,base):
     for a in soup.select('a[href]'):
         href=urljoin(base,a['href'])
         p=urlsplit(href)
+        if re.search(r'[\s<>"\'\\]',unquote(p.path)): continue
         if p.netloc!=urlsplit(base).netloc or not PROMO.search(p.path): continue
         if '/products/' in p.path or '/store/detail/' in p.path: continue
         # Never explode every sort/filter facet; only collection-level links.

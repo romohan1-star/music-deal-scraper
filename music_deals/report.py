@@ -118,9 +118,12 @@ def export(store,run,out):
     assert check['All Offers'].max_row==max(2,len(offers)+1)
     check.close()
     totals=Counter(o['retailer'] for o in offers)
+    run_row=store.db.execute('SELECT finished_at FROM runs WHERE id=?',(run,)).fetchone()
+    execution_state='FINISHED' if run_row and run_row['finished_at'] else 'CHECKPOINT'
     summary=[f'# Music retailer promotion inventory — {run}', '',f'**{len(offers):,} unique retailer offers** collected across **{len(totals)} retailers**. Product variants are separate offers. Raw inventory is preserved independently of the shortlist.','',
         'Prices are listing observations, excluding sales tax and shipping. Effective price means the directly displayed price without an unverified coupon. No purchase recommendation or historical-low claim is implied.','',
         '## Coverage','', '| Retailer | Offers | Collection statuses |','|---|---:|---|']
+    summary.insert(4,f'Execution state: **{execution_state}**. Unfinished collections are retained for resumption; this does not imply retailer-wide completeness.')
     for retailer in sorted({c['retailer'] for c in coverage}):
         counts=Counter(c['status'] for c in coverage if c['retailer']==retailer)
         summary.append(f'| {retailer} | {totals[retailer]} | '+', '.join(f'{n} {s}' for s,n in counts.items())+' |')
@@ -146,4 +149,4 @@ def export(store,run,out):
     for c in coverage:
         if c['status']!='VERIFIED COMPLETE': summary.append(f"- {c['retailer']} — {c['url']}: **{c['status']}**. {c['reason']}")
     (out/'executive_summary.md').write_text('\n'.join(summary),encoding='utf-8')
-    (out/'run_manifest.json').write_text(json.dumps({'run_id':run,'unique_offers':len(offers),'retailer_offer_counts':dict(totals),'coverage_status_counts':dict(Counter(c['status'] for c in coverage)),'shortlist_count':len(shortlist),'validation_counts':dict(Counter(v['status'] for v in checks)),'ai_calls':0},indent=2))
+    (out/'run_manifest.json').write_text(json.dumps({'run_id':run,'execution_state':execution_state,'unique_offers':len(offers),'retailer_offer_counts':dict(totals),'coverage_status_counts':dict(Counter(c['status'] for c in coverage)),'shortlist_count':len(shortlist),'validation_counts':dict(Counter(v['status'] for v in checks)),'ai_calls':0},indent=2))

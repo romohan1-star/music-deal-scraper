@@ -162,6 +162,11 @@ artifacts can still upload within the job's ceiling even if collection fails.
 Report checkpoints are written after each retailer; SQLite retains each completed
 page even if a process is stopped partway through a retailer.
 
+`Live smoke validation` is a separate, explicitly bounded one-collection test of
+live extraction, output reconciliation and artifact upload. Its successful result
+does not certify a full inventory crawl. Its artifacts use the `live-smoke-` prefix
+and are never restored as the normal collector's historical snapshot.
+
 The next run restores the most recent unexpired main-branch snapshot's database and
 evidence using the workflow's temporary read-only GitHub token. **Artifacts expire
 after 30 days** (or sooner if repository policy requires). They are not a permanent
