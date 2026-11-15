@@ -31,13 +31,25 @@ def relevance(o):
     if score==25 and o.get('promotional_price') is not None and o['promotional_price']<700:
         score=10; reasons.append('No clear upgrade over owned Sire S7 established')
     if re.search(r'distortion|overdrive|compressor|chorus|reverb|delay pedal|eq pedal|tuner pedal',text): score=min(score,5); reasons.append('Conventional effect largely covered by Anagram')
-    if re.search(r'4[ -]string.*bass|mustang.*bass|ray34|marcus miller v7|waza.air|maschine\+|juno|rokit',text): score=min(score,10); reasons.append('Substantial overlap with owned gear')
-    if any(re.search(pattern,text,re.I) for pattern in PROFILE.get('owned_patterns',[])):
+    if 'fretless' not in text and re.search(r'4[ -]string.*bass|mustang.*bass|ray34|marcus miller v7|waza.air|maschine\+|juno|rokit',text): score=min(score,10); reasons.append('Substantial overlap with owned gear')
+    if 'fretless' not in text and any(re.search(pattern,text,re.I) for pattern in PROFILE.get('owned_patterns',[])):
         score=min(score,5); reasons.append('Owned capability; replacement value not established')
+    if score>=95 and re.search(r'\behb\d|\bbtb\d|multi[ -]?scale|\bspector\b|\bdingwall\b|\bsandberg\b|\blakland\b|\bpremium\b|\bprestige\b|\bamerican\b',text):
+        score+=10; reasons.append('Modern or premium bass candidate; verify specifications')
     if score>=95 and 'fretless' not in text and re.search(r'\bgio\b|\bgsr\d|\bjs series\b|action bass|\bray5(?:\b|[ -])',text):
         score=45; reasons.append('Entry-level five-string option; upgrade value needs review')
     if 'bass' in text and re.search(r'\bacoustic\b|\ba/e\b|\bauditorium\b',text):
         score=min(score,45); reasons.append('Acoustic bass is secondary to electric-bass goals')
+    if re.search(r'\bfreeze (?:sound retainer|pedal)|\b22500 looper foot controller\b',text):
+        score=min(score,5); reasons.append('Redundant freeze function or requires an unowned host device')
+    if 'expression pedal' in text and not re.search(r'\bmidi\b|gesture|pressure|ribbon',text):
+        score=min(score,10); reasons.append('Basic expression control already covered')
+    if 'audio interface' in text and o.get('promotional_price') is not None and o['promotional_price']<250 and not re.search(r'4[ -]channel|8[ -]channel|multitrack|multi-track|digital mixer',text):
+        score=min(score,15); reasons.append('Basic recording overlaps Anagram; expanded routing not established')
+    if 'software' in text or re.search(r'\bsoundiron\b|\bsample (?:pack|library)\b',text):
+        score=min(score,15); reasons.append('Sample/software purchase has lower priority than a new playing capability')
+    if 'bass' not in text and re.search(r'transacoustic|\bacoustic guitar\b|classical guitar',text):
+        score=min(score,15); reasons.append('Outside the electric-guitar upgrade focus')
     if not PROFILE.get('allow_left_handed',False) and re.search(r'left[ -]hand(?:ed)?|\blefty\b',text):
         score=0; reasons.append('Left-handed instrument excluded from personal shortlist')
     if o.get('availability') in ('out_of_stock','https://schema.org/OutOfStock'): score=0; reasons.append('Out of stock')

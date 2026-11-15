@@ -248,3 +248,9 @@ def test_comparison_does_not_call_unknown_stock_in_stock():
     common={'brand':'Brand','product_title':'Same Model Red','condition':'new','currency':'USD','product_url':'https://r/p','variant':None,'bundle_contents':None}
     rows=comparisons([common|{'retailer':'a','verified_effective_price':50,'availability':None},common|{'retailer':'b','verified_effective_price':100,'availability':'in_stock'}])
     assert len(rows)==2 and all(r['lowest_observed_in_stock_price']==100 for r in rows)
+
+
+def test_real_shortlist_false_positives_are_demoted():
+    for title,price in [('Electro-Harmonix 22500 Looper Foot Controller',35.99),('Fender Link I O Audio Interface',89.95),('Electro-Harmonix Freeze Sound Retainer Pedal',129.99),('Soundiron Glitch Hero',49.5)]:
+        assert relevance({'product_title':title,'category':None,'promotional_price':price})[0]<25
+    assert relevance({'product_title':'Sire Marcus Miller V7 4-String Fretless Bass','category':None,'promotional_price':700})[0]>=95
