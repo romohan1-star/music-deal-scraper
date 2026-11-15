@@ -1,12 +1,16 @@
 import csv
 import json
 import re
+import math
 from collections import defaultdict,Counter
 from pathlib import Path
 from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font,PatternFill,Alignment
 from openpyxl.utils import get_column_letter
 from .model import match_key
+
+PROFILE_PATH=Path(__file__).resolve().parent.parent/'config'/'relevance.json'
+PROFILE=json.loads(PROFILE_PATH.read_text()) if PROFILE_PATH.exists() else {}
 
 
 def relevance(o):
@@ -23,9 +27,15 @@ def relevance(o):
         (r'synthesizer|synth pedal',45,'Synthesis; overlap with JUNO/Anagram/Maschine+'),
         (r'electric guitar',25,'Guitar candidate; upgrade value requires review')]:
         if re.search(pattern,text): score=max(score,points); reasons.append(why)
-    if re.search(r'cable|gig bag|cover|case for|replacement|power supply',text): score=min(score,10)
+    if re.search(r'cable|gig bag|cover|case for|replacement|power supply|\bstrings\b|\bpickups?\b|\bstand\b',text): score=min(score,10)
+    if score==25 and o.get('promotional_price') is not None and o['promotional_price']<700:
+        score=10; reasons.append('No clear upgrade over owned Sire S7 established')
     if re.search(r'distortion|overdrive|compressor|chorus|reverb|delay pedal|eq pedal|tuner pedal',text): score=min(score,5); reasons.append('Conventional effect largely covered by Anagram')
     if re.search(r'4[ -]string.*bass|mustang.*bass|ray34|marcus miller v7|waza.air|maschine\+|juno|rokit',text): score=min(score,10); reasons.append('Substantial overlap with owned gear')
+    if any(re.search(pattern,text,re.I) for pattern in PROFILE.get('owned_patterns',[])):
+        score=min(score,5); reasons.append('Owned capability; replacement value not established')
+    if not PROFILE.get('allow_left_handed',False) and re.search(r'left[ -]hand(?:ed)?|\blefty\b',text):
+        score=0; reasons.append('Left-handed instrument excluded from personal shortlist')
     if o.get('availability') in ('out_of_stock','https://schema.org/OutOfStock'): score=0; reasons.append('Out of stock')
     # Discounts only break ties; unverified compare-at cannot inflate ranking.
     return score,'; '.join(reasons)
@@ -59,13 +69,14 @@ def export(store,run,out):
     shortlist=sorted([o for o in offers if o['relevance_score']>=25 and o.get('verified_effective_price') is not None],key=lambda o:(-o['relevance_score'],-(o.get('discount_percentage') or 0),o['verified_effective_price']))[:30]
     coverage=store.coverage(run); comps=comparisons(offers)
     errors=[dict(x) for x in store.db.execute('SELECT retailer,url,stage,message,created_at FROM errors WHERE run_id=?',(run,))]
-    checks=[dict(x) for x in store.db.execute('SELECT retailer,collection_url,source_url,check_type,status,detail FROM validations WHERE run_id=?',(run,))]
+    checks=[dict(x) for x in store.db.execute('SELECT retailer,collection_url,source_url,check_type,status,detail FROM validations WHERE id IN (SELECT MAX(id) FROM validations WHERE run_id=? GROUP BY retailer,collection_url,source_url,check_type)',(run,))]
     for v in checks:
         if v['status']!='PASS': errors.append({'retailer':v['retailer'],'url':v['source_url'],'stage':v['check_type'],'message':v['status']+': '+v['detail']})
     history=[]
     for row in store.db.execute('SELECT run_id,data_json FROM observations ORDER BY collected_at,offer_id'):
         o=json.loads(row['data_json']); history.append({k:o.get(k) for k in ('offer_id','retailer','product_title','condition','currency','collected_at','promotional_price','verified_effective_price','product_url')}|{'run_id':row['run_id']})
-    datasets={'All Offers':offers,'Best Deals':shortlist,'Cross-Retailer Comparisons':comps,'Coverage Report':coverage,'Errors and Limitations':errors,'Price History':history,'Validation Evidence':checks}
+    shortlist_view=[{'rank':i,**{k:o.get(k) for k in ('product_title','retailer','condition','verified_effective_price','currency','reference_price','reference_discount_percentage','availability','relevance_reason','product_url','data_quality_flags')}} for i,o in enumerate(shortlist,1)]
+    datasets={'All Offers':offers,'Best Deals':shortlist_view,'Cross-Retailer Comparisons':comps,'Coverage Report':coverage,'Errors and Limitations':errors,'Price History':history,'Validation Evidence':checks}
     for name,rows in [('inventory',offers),('coverage',coverage),('validations',checks),('errors',errors)]:
         with (out/f'{name}.csv').open('w',newline='',encoding='utf-8-sig') as f:
             keys=list(dict.fromkeys(k for row in rows for k in row)) or ['note']
@@ -79,7 +90,7 @@ def export(store,run,out):
         ws.append(keys)
         for row in rows: ws.append([safe_cell(row.get(k)) for k in keys])
         if not rows: ws.append(['No qualifying records in this run; see Coverage Report.'])
-        ws.freeze_panes='C2'; ws.auto_filter.ref=ws.dimensions
+        ws.freeze_panes='D2' if name=='All Offers' else 'C2'; ws.auto_filter.ref=ws.dimensions
         ws.sheet_view.showGridLines=False
         for c in ws[1]: c.fill=PatternFill('solid',fgColor='173D4B'); c.font=Font(color='FFFFFF',bold=True); c.alignment=Alignment(wrap_text=True,vertical='center')
         ws.row_dimensions[1].height=32
@@ -91,7 +102,11 @@ def export(store,run,out):
             for cells in ws.iter_rows(min_row=2,min_col=i,max_col=i):
                 c=cells[0]
                 if c.row%2==0: c.fill=PatternFill('solid',fgColor='EEF4F6')
-                c.alignment=Alignment(vertical='top',wrap_text=k in ('reason','message','detail','relevance_reason'))
+                wrap=k in ('product_title','title','reason','message','detail','relevance_reason','data_quality_flags')
+                c.alignment=Alignment(vertical='top',wrap_text=wrap)
+                if wrap and c.value is not None:
+                    height=max(18,15*math.ceil(len(str(c.value))/max(width-4,1))+3)
+                    ws.row_dimensions[c.row].height=min(409,max(ws.row_dimensions[c.row].height or 18,height))
                 if 'price' in k or k=='msrp':
                     if isinstance(c.value,(int,float)): c.number_format='#,##0.00'
                 elif k.endswith('percentage'): c.number_format='0.00"%"'

@@ -1,0 +1,16 @@
+{
+  "allow_left_handed": false,
+  "owned_patterns": [
+    "marcus miller v7",
+    "ray34",
+    "sr924",
+    "mustang.*bass",
+    "darkglass anagram",
+    "waza[ -]?air",
+    "maschine\\+",
+    "roland juno",
+    "krk.*rokit",
+    "pico deep freeze|deep freeze pedal"
+  ],
+  "notes": "Deep Freeze is included from the user's existing gear context. Edit this file if ownership changes. Conventional effects are also demoted because Anagram covers them. No paid AI enrichment."
+}

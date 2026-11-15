@@ -117,6 +117,7 @@ class FixtureClient:
         text=self.pages[url]; path=self.tmp/str(len(self.calls)); path.write_text(text)
         self.last_result={'text':text,'evidence_path':str(path),'status':200,'fetched_at':'2026-11-15T00:00:00+00:00'}
         return self.last_result
+    def close(self): pass
 
 
 def test_repeated_page_is_partial_and_data_retained(tmp_path):
@@ -160,6 +161,8 @@ def test_relevance_does_not_reward_redundant_or_unavailable():
     assert relevance({'product_title':'Bass 5-string','category':'bass','availability':'in_stock'})[0]==95
     assert relevance({'product_title':'Overdrive pedal','category':None})[0]<=5
     assert relevance({'product_title':'Fretless bass','category':None,'availability':'out_of_stock'})[0]==0
+    assert relevance({'product_title':'Left Handed 5-String Bass','category':None,'availability':'in_stock'})[0]==0
+    assert relevance({'product_title':'Electro-Harmonix Pico Deep Freeze Pedal','category':None})[0]<=5
 
 
 def test_magento_page_size_does_not_skip_items():
@@ -183,4 +186,35 @@ def test_coverage_cannot_exceed_one_hundred(tmp_path):
     os=[Offer('s','P'+str(i),'https://s/'+str(i),'https://s/c',str(i)).finish() for i in range(2)]
     s.save_page('r','s','https://s/c','https://s/c',1,{},os,[])
     assert s.coverage('r')[0]['coverage_percentage'] is None
+    s.close()
+
+
+def test_end_to_end_isolates_failure_and_exports(tmp_path,monkeypatch):
+    from music_deals import pipeline
+    html='''<p class="toolbar-amount">1 items</p><li class="product-item"><a class="product-item-link" href="/p">Fretless Bass (Demo)</a><div data-product-id="1"></div><span data-price-type="finalPrice" data-price-amount="799"></span></li>'''
+    client=FixtureClient({'https://good/':'<html/>','https://good/sale':html},tmp_path)
+    monkeypatch.setattr(pipeline,'Client',lambda *a,**k:client)
+    cfg={'sample_products':0,'retailers':[
+        {'id':'good','tier':1,'base':'https://good','adapter':'magento','policy':'reviewed','seeds':['/sale']},
+        {'id':'bad','tier':2,'base':'https://bad','adapter':'magento','policy':'reviewed','seeds':['/sale']} ]}
+    pipeline.collect(cfg,str(tmp_path/'db'),str(tmp_path/'reports'),'test-run')
+    s=Store(tmp_path/'db')
+    assert len(s.current('test-run'))==1
+    statuses={r['retailer']:r['status'] for r in s.coverage('test-run')}
+    assert statuses=={'good':'VERIFIED COMPLETE','bad':'PARTIAL'}
+    manifest=json.loads((tmp_path/'reports/run_manifest.json').read_text())
+    assert manifest['unique_offers']==1 and manifest['ai_calls']==0
+    s.close()
+    from scripts.validate_outputs import validate
+    assert validate(tmp_path/'db',tmp_path/'reports')['status']=='PASS'
+
+
+def test_detail_validation_cannot_borrow_related_product_price(tmp_path):
+    from music_deals.pipeline import validate_samples
+    s=Store(tmp_path/'db')
+    o=Offer('r','Target','https://r/target','https://r/s','1',promotional_price=100)
+    html='''<script type="application/ld+json">[{"@type":"Product","name":"Target","offers":{"@type":"Offer","price":"200"}},{"@type":"Product","name":"Related","offers":{"@type":"Offer","price":"100"}}]</script>'''
+    c=FixtureClient({'https://r/target':html},tmp_path)
+    validate_samples(s,c,'run',{'id':'r'},'https://r/s',[o],1)
+    assert s.db.execute('SELECT status FROM validations').fetchone()[0]=='FAIL'
     s.close()

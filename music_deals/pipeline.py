@@ -7,7 +7,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 from urllib.parse import urljoin,urlsplit
 from bs4 import BeautifulSoup
-from .collectors import ADAPTERS, promo_links, json_objects
+from .collectors import ADAPTERS, ShopifyCollector, promo_links, json_objects
 from .http import Client, AccessBlocked
 from .model import canonical, money, now
 from .store import Store
@@ -74,7 +74,7 @@ def run_retailer(store,client,run,cfg,config,max_pages):
     except Exception as e:
         status='BLOCKED' if isinstance(e,AccessBlocked) else 'PARTIAL'
         for seed in seeds:
-            store.save_page(run,retailer,seed,seed,0,client.last_result,[],[],status='failed',error=str(e))
+            store.save_page(run,retailer,seed,client.last_result.get('url',cfg['base']+'/'),0,client.last_result,[],[],status='failed',error=str(e))
         with store.db: store.db.execute('UPDATE collections SET status=?,reason=? WHERE run_id=? AND retailer=?',(status,str(e),run,retailer))
         store.error(run,retailer,cfg['base'],'access',str(e)); return
     adapter=ADAPTERS[cfg['adapter']](cfg); adapter.metadata(home['text'])
@@ -82,12 +82,14 @@ def run_retailer(store,client,run,cfg,config,max_pages):
     seen=set()
     # Restore discovered collections on resume, not just original seeds.
     queue.extend(r[0] for r in store.db.execute('SELECT url FROM collections WHERE run_id=? AND retailer=?',(run,retailer)))
+    for url in set(queue): store.collection(run,retailer,canonical(url))
     limit=config.get('max_collections_per_retailer',100)
     while queue and len(seen)<limit:
         collection=canonical(queue.popleft())
         if collection in seen: continue
         seen.add(collection); store.collection(run,retailer,collection)
         children=crawl_collection(store,client,run,cfg,adapter,collection,max_pages or config.get('max_pages_per_collection',500),config.get('sample_products',3))
+        for url in children: store.collection(run,retailer,url)
         queue.extend(children)
     if queue:
         for url in sorted(set(queue)-seen):
@@ -100,6 +102,8 @@ def run_retailer(store,client,run,cfg,config,max_pages):
 def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples):
     retailer=cfg['id']; queue=deque([collection]); visited=set(); fingerprints=set(); children=set(); terminal=False; count=None; reliable=False; failed=False; blocked=False; capped=False
     product_pages=[]; all_offers=[]; reason=''
+    existing=store.db.execute('SELECT * FROM collections WHERE run_id=? AND retailer=? AND url=?',(run,retailer,collection)).fetchone()
+    completed_checkpoint=bool(existing and existing['terminal'] and existing['status'] in ('VERIFIED COMPLETE','UNVERIFIABLE'))
     while queue:
         if len(visited)>=page_limit: capped=True; reason='Page cap reached; queued pages remain'; break
         url=queue.popleft()
@@ -107,6 +111,7 @@ def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples)
         if urlsplit(url).netloc!=urlsplit(cfg['base']).netloc: raise ValueError('Pagination left configured retailer')
         visited.add(url); index=len(visited)
         old=store.page(run,retailer,collection,url)
+        result=None
         try:
             if old and old['status']=='completed' and old['evidence_path'] and Path(old['evidence_path']).exists():
                 result={'text':Path(old['evidence_path']).read_text(),'fetched_at':old['fetched_at'],'sha256':old['sha256'],'evidence_path':old['evidence_path'],'status':old['http_status'],'attempts':0}
@@ -122,6 +127,8 @@ def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples)
                 if count is not None and count!=parsed.advertised_count:
                     failed=True; reason='Advertised count changed during pagination'
                 count=parsed.advertised_count; reliable=parsed.count_reliable
+                with store.db:
+                    store.db.execute('UPDATE collections SET advertised_count=?,count_reliable=?,count_unit=? WHERE run_id=? AND retailer=? AND url=?',(count,int(reliable),'products (not variants)',run,retailer,collection))
             ids=tuple(sorted(set(parsed.listing_ids)))
             if ids and ids in fingerprints:
                 raise ValueError('Repeated product page: pagination may be ignored or looping')
@@ -134,12 +141,21 @@ def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples)
                 reason=parsed.reason or 'No supported listing data or pagination found'
         except Exception as e:
             failed=True; blocked=isinstance(e,AccessBlocked); reason=str(e)
-            store.save_page(run,retailer,collection,url,index,client.last_result,[],[],status='failed',error=str(e))
+            store.save_page(run,retailer,collection,url,index,result or client.last_result,[],[],status='failed',error=str(e))
             store.error(run,retailer,url,'collection',str(e))
             break
     observed=store.db.execute('SELECT COUNT(DISTINCT listing_id) FROM membership WHERE run_id=? AND retailer=? AND collection_url=?',(run,retailer,collection)).fetchone()[0]
+    if isinstance(adapter,ShopifyCollector) and product_pages and not failed and not capped:
+        if completed_checkpoint and existing['count_reliable']:
+            count=existing['advertised_count']; reliable=True
+        else:
+            metadata_count=check_collection_count(store,client,run,retailer,collection)
+            if metadata_count is not None: count=metadata_count; reliable=True
     validation_ok=False
-    if product_pages and not failed and not capped:
+    if completed_checkpoint and not failed and not capped:
+        # Same immutable run snapshot: retain completed verification on resume.
+        validation_ok=existing['status']=='VERIFIED COMPLETE'
+    elif product_pages and not failed and not capped:
         validation_ok=validate_pages(store,client,run,retailer,collection,adapter,product_pages)
         validate_samples(store,client,run,cfg,collection,all_offers,samples)
     if blocked: status='PARTIAL' if observed else 'BLOCKED'
@@ -156,7 +172,22 @@ def crawl_collection(store,client,run,cfg,adapter,collection,page_limit,samples)
 
 
 def validation(store,run,retailer,collection,url,kind,status,detail):
-    with store.db: store.db.execute('INSERT INTO validations(run_id,retailer,collection_url,source_url,check_type,status,detail) VALUES(?,?,?,?,?,?,?)',(run,retailer,collection,url,kind,status,detail))
+    with store.db:
+        store.db.execute('DELETE FROM validations WHERE run_id=? AND retailer=? AND collection_url=? AND source_url=? AND check_type=?',(run,retailer,collection,url,kind))
+        store.db.execute('INSERT INTO validations(run_id,retailer,collection_url,source_url,check_type,status,detail) VALUES(?,?,?,?,?,?,?)',(run,retailer,collection,url,kind,status,detail))
+
+
+def check_collection_count(store,client,run,retailer,collection):
+    url=collection.rstrip('/')+'.json'
+    try:
+        r=client.get(url)
+        count=json.loads(r['text']).get('collection',{}).get('products_count')
+        if isinstance(count,bool) or not isinstance(count,int) or count<0: raise ValueError('No explicit collection products_count')
+        validation(store,run,retailer,collection,url,'collection_count','PASS',f'Explicit retailer collection products_count={count}; evidence={r["evidence_path"]}')
+        return count
+    except Exception as e:
+        validation(store,run,retailer,collection,url,'collection_count','UNVERIFIABLE',str(e))
+        return None
 
 
 def validate_pages(store,client,run,retailer,collection,adapter,pages):
@@ -181,11 +212,17 @@ def validate_samples(store,client,run,cfg,collection,offers,n):
         try:
             r=client.get(o.product_url); soup=BeautifulSoup(r['text'],'html.parser')
             prices=[]; titles=[]
+            normalize=lambda t: re.sub(r'\s+',' ',t or '').strip().casefold()
             for obj in json_objects(soup):
-                if obj.get('@type')=='Product': titles.append(obj.get('name',''))
-                if obj.get('@type')=='Offer':
-                    p=money(obj.get('price'))
-                    if p is not None: prices.append(p)
+                if obj.get('@type')=='Product':
+                    name=obj.get('name',''); titles.append(name)
+                    if normalize(name)!=normalize(o.product_title): continue
+                    product_offers=obj.get('offers',[])
+                    if isinstance(product_offers,dict): product_offers=[product_offers]
+                    for product_offer in product_offers:
+                        if isinstance(product_offer,dict):
+                            price=money(product_offer.get('price'))
+                            if price is not None: prices.append(price)
             if not titles:
                 h1=soup.select_one('h1.page-title,h1[itemprop="name"]')
                 if h1: titles.append(h1.get_text(' ',strip=True))
@@ -196,7 +233,7 @@ def validate_samples(store,client,run,cfg,collection,offers,n):
                     prices=[money(x.get('data-price-amount')) for x in main.select('[data-price-type="finalPrice"]')]
                     prices=[p for p in prices if p is not None]
             # Shopify product JSON is often embedded in HTML even without JSON-LD.
-            title_ok=any(re.sub(r'\s+',' ',t).strip().casefold()==re.sub(r'\s+',' ',o.product_title).strip().casefold() for t in titles)
+            title_ok=any(normalize(t)==normalize(o.product_title) for t in titles)
             price_ok=o.promotional_price is not None and o.promotional_price in prices
             status='PASS' if title_ok and price_ok else ('FAIL' if titles and prices else 'UNVERIFIABLE')
             validation(store,run,cfg['id'],collection,o.product_url,'random_product',status,f'title_match={title_ok}; price_match={price_ok}; detail_prices={prices}; evidence={r["evidence_path"]}')

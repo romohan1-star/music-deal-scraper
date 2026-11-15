@@ -28,7 +28,7 @@ class Store:
 
     def collection(self, run, retailer, url):
         with self.db:
-            self.db.execute('INSERT OR IGNORE INTO collections(run_id,retailer,url) VALUES(?,?,?)',(run,retailer,url))
+            self.db.execute("INSERT OR IGNORE INTO collections(run_id,retailer,url,reason) VALUES(?,?,?,'Discovered/configured; not yet attempted')",(run,retailer,url))
 
     def page(self, run, retailer, collection, url):
         return self.db.execute('SELECT * FROM pages WHERE run_id=? AND retailer=? AND collection_url=? AND url=?',(run,retailer,collection,url)).fetchone()
@@ -52,13 +52,15 @@ class Store:
         rows=[]
         for c in self.db.execute('SELECT * FROM collections WHERE run_id=? ORDER BY retailer,url',(run,)):
             d=dict(c)
-            pages=self.db.execute('SELECT status,COUNT(*) n,SUM(attempts) attempts FROM pages WHERE run_id=? AND retailer=? AND collection_url=? GROUP BY status',(run,c['retailer'],c['url'])).fetchall()
+            pages=self.db.execute('SELECT status,COUNT(*) n,SUM(attempts) attempts FROM pages WHERE run_id=? AND retailer=? AND collection_url=? AND page_index>0 GROUP BY status',(run,c['retailer'],c['url'])).fetchall()
             d['pages_attempted']=sum(x['n'] for x in pages)
             d['request_attempts']=sum(x['attempts'] for x in pages)
             d['pages_completed']=sum(x['n'] for x in pages if x['status']=='completed')
             d['pages_failed']=d['pages_attempted']-d['pages_completed']
             counts=self.db.execute('SELECT COUNT(*) offers,COUNT(DISTINCT listing_id) listings FROM membership WHERE run_id=? AND retailer=? AND collection_url=?',(run,c['retailer'],c['url'])).fetchone()
             d['unique_offers']=counts['offers']; d['unique_listings']=counts['listings']
+            d['offer_rows_extracted']=self.db.execute("SELECT COALESCE(SUM(products),0) FROM pages WHERE run_id=? AND retailer=? AND collection_url=? AND status='completed'",(run,c['retailer'],c['url'])).fetchone()[0]
+            d['repeated_offer_rows_within_collection']=max(0,d['offer_rows_extracted']-d['unique_offers'])
             d['duplicate_offers_across_collections']=self.db.execute('SELECT COUNT(*) FROM membership a WHERE a.run_id=? AND a.retailer=? AND a.collection_url=? AND EXISTS(SELECT 1 FROM membership b WHERE b.run_id=a.run_id AND b.retailer=a.retailer AND b.offer_id=a.offer_id AND b.collection_url<>a.collection_url)',(run,c['retailer'],c['url'])).fetchone()[0]
             denom=d['advertised_count']
             d['coverage_percentage']=round(100*d['unique_listings']/denom,2) if d['count_reliable'] and denom and d['unique_listings']<=denom else None

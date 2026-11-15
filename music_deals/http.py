@@ -3,6 +3,8 @@ import hashlib
 import json
 import re
 import time
+from datetime import datetime,timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlsplit, urljoin, unquote
 import httpx
@@ -72,7 +74,12 @@ class Client:
                     if attempt<self.retries:
                         retry=r.headers.get('Retry-After','')
                         wait=float(retry) if retry.isdigit() else 2**(attempt+1)
-                        if wait>60: raise FetchError(f'Retry-After {wait}s exceeds bounded retry budget; resume later')
+                        if retry and not retry.isdigit():
+                            try: wait=max(0,(parsedate_to_datetime(retry)-datetime.now(timezone.utc)).total_seconds())
+                            except (ValueError,TypeError): pass
+                        if wait>60:
+                            self.blocked[f'{urlsplit(url).scheme}://{host}']=f'Retry-After {wait:.0f}s exceeds bounded retry budget; resume later'
+                            raise AccessBlocked(self.blocked[f'{urlsplit(url).scheme}://{host}'])
                         time.sleep(wait); continue
                 return result
             except httpx.RequestError as e:
@@ -96,6 +103,7 @@ class Client:
         return self.policies[origin]
 
     def get(self,url):
+        self.last_result={'url':url,'attempts':0,'fetched_at':now()}
         for _ in range(6):
             s=urlsplit(url)
             if s.scheme!='https': raise AccessBlocked('Only HTTPS retailer requests allowed')

@@ -54,6 +54,7 @@ class Offer:
     condition: str | None = None
     bundle_contents: str | None = None
     variant: str | None = None
+    variant_id: str | None = None
     msrp: float | None = None
     normal_advertised_price: float | None = None
     reference_price: float | None = None
@@ -72,7 +73,7 @@ class Offer:
 
     @property
     def offer_id(self):
-        return hashlib.sha256(f'{self.retailer}|{self.listing_id}|{self.condition}|{self.variant}'.encode()).hexdigest()[:24]
+        return hashlib.sha256(f'{self.retailer}|{self.listing_id}|{self.condition}|{self.variant_id or self.variant}'.encode()).hexdigest()[:24]
 
     def finish(self):
         self.product_url = canonical(self.product_url)

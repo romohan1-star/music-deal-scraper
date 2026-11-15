@@ -56,7 +56,9 @@ jobs:
           if [[ -n "$RETAILERS" ]]; then args+=(--retailers "$RETAILERS"); fi
           if [[ -n "$RESUME_RUN_ID" ]]; then args+=(--run-id "$RESUME_RUN_ID"); fi
           set -o pipefail
-          python -u -m music_deals.cli collect "${args[@]}" 2>&1 | tee logs/collection.log
+          timeout --signal=INT --kill-after=60s 100m python -u -m music_deals.cli collect "${args[@]}" 2>&1 | tee logs/collection.log
+      - name: Validate exported files
+        run: python scripts/validate_outputs.py | tee reports/output_validation.json
       - name: Attach summary
         if: always()
         run: |

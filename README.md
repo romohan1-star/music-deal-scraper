@@ -66,8 +66,9 @@ python -m music_deals.cli export --run-id THE_PRINTED_RUN_ID
 ```
 
 Resume requires the same JSON configuration and existing database/evidence. Pages
-already completed are read from their saved evidence without refetching. Explicit
-first/middle/final checks do re-request selected boundaries. Failed/unvisited pages
+already completed are read from their saved evidence without refetching. Completed
+collection validations are retained; newly finished collections recheck selected
+first/middle/final boundaries. Failed/unvisited pages
 are attempted again. A page checkpoint and its offers commit in one SQLite
 transaction. `--max-pages` may be increased when resuming. Omitting `--run-id` starts
 a new timestamped observation series with fresh requests. Old observations remain
@@ -92,6 +93,10 @@ The workbook exporter uses openpyxl so the requested Python-only pipeline runs i
 GitHub without proprietary runtime libraries. It freezes headers, adds filters,
 formats numeric prices, links product URLs and guards against formula injection.
 Exports are read back and checked for expected sheets and row counts.
+For an independent full CSV/Excel/SQLite reconciliation after a run, use
+`python scripts/validate_outputs.py`. To recheck already downloaded random sample
+pages after parser maintenance without making new requests, use
+`python -m scripts.audit_saved_samples --run-id THE_RUN_ID` and export again.
 
 ## Coverage definitions
 
@@ -104,7 +109,9 @@ Exports are read back and checked for expected sheets and row counts.
 
 Collection counts refer to **products**, not variants. Offers preserve each priced
 variant. Duplicate memberships across collections are reported without counting
-them as new offers. Coverage percentage is blank when the denominator is unknown,
+them as new offers. Repeated offer rows within a collection are counted too; this
+includes overlap when switching from the initial page size to the larger size
+offered in the retailer's selector. Coverage percentage is blank when the denominator is unknown,
 zero or inconsistent. First, middle and final product pages are rechecked where
 possible, and reproducibly random detail-page samples check titles and prices.
 No entire-store completeness claim is made. Homepage/nav/link discovery can miss
@@ -135,7 +142,9 @@ comparisons is preferable to false equivalence.
 
 Relevance rules prioritize fretless/five-string bass, unusual effects, expressive
 control, recording and practice. Conventional effects and clearly overlapping
-owned gear are demoted. The list is a set of candidates, not 30 forced purchases;
+owned gear are demoted. `config/relevance.json` holds editable owned-gear patterns
+and handedness preference; left-handed instruments are excluded by default.
+The list is a set of candidates, not 30 forced purchases;
 price, condition, specifications and actual usefulness still need review.
 
 ## GitHub: download a report without an AI agent
@@ -148,7 +157,8 @@ price, condition, specifications and actual usefulness still need review.
 
 The workflow also runs tests. Source changes pushed to `main` trigger a validation
 collection; branches and PRs run tests only. Runs are serialized and have a
-120-minute ceiling. Report/data/log artifacts upload even if collection fails.
+120-minute ceiling. Collection is interrupted at 100 minutes so report/data/log
+artifacts can still upload within the job's ceiling even if collection fails.
 Report checkpoints are written after each retailer; SQLite retains each completed
 page even if a process is stopped partway through a retailer.
 
