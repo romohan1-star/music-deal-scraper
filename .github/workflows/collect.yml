@@ -1,0 +1,75 @@
+name: Collect music promotions
+
+on:
+  workflow_dispatch:
+    inputs:
+      retailers:
+        description: 'Comma-separated retailer IDs (blank means all)'
+        required: false
+        default: ''
+      resume_run_id:
+        description: 'Existing run ID to resume (blank means fresh prices)'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths: ['music_deals/**', 'tests/**', 'config/**', 'pyproject.toml', '.github/workflows/collect.yml', 'scripts/restore_snapshot.py']
+  # Recurrence intentionally DISABLED until live validation is accepted.
+  # schedule:
+  #   - cron: '0 11 * * *'  # 6am EST / 7am EDT; GitHub cron is UTC.
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: music-deals-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: python -m pip install -e '.[test]'
+      - name: Tests
+        run: python -m pytest -q
+      - name: Restore previous database and checkpoints
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/restore_snapshot.py
+      - name: Collect (no AI)
+        env:
+          RETAILERS: ${{ inputs.retailers }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        shell: bash
+        run: |
+          mkdir -p reports logs
+          args=()
+          if [[ -n "$RETAILERS" ]]; then args+=(--retailers "$RETAILERS"); fi
+          if [[ -n "$RESUME_RUN_ID" ]]; then args+=(--run-id "$RESUME_RUN_ID"); fi
+          set -o pipefail
+          python -u -m music_deals.cli collect "${args[@]}" 2>&1 | tee logs/collection.log
+      - name: Attach summary
+        if: always()
+        run: |
+          if [[ -f reports/executive_summary.md ]]; then cat reports/executive_summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload reports, database, evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-deals-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/
+            data/deals.sqlite*
+            data/evidence/
+            logs/
+          retention-days: 30
+          if-no-files-found: warn

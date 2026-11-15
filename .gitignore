@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Generated inventory, evidence and reports are downloadable artifacts, not source.
+data/
+reports/
+logs/
+*.log
+*.zip
+*.sqlite*
+*.xlsx

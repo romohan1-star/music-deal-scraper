@@ -1,0 +1,217 @@
+{
+  "delay_seconds": 1.5,
+  "max_pages_per_collection": 500,
+  "max_collections_per_retailer": 100,
+  "sample_products": 3,
+  "ai_enrichment": false,
+  "retailers": [
+    {
+      "id": "guitar_center",
+      "name": "Guitar Center",
+      "tier": 1,
+      "base": "https://www.guitarcenter.com",
+      "adapter": "guitar_center",
+      "seeds": [
+        "/deals",
+        "/Clearance.gc",
+        "/Open-Box.gc"
+      ],
+      "terms": "/pages/terms-and-conditions",
+      "policy": "review_on_access",
+      "parser_validation": "blocked: no live listing fixtures"
+    },
+    {
+      "id": "sweetwater",
+      "name": "Sweetwater",
+      "tier": 1,
+      "base": "https://www.sweetwater.com",
+      "adapter": "sweetwater",
+      "seeds": [
+        "/deals/",
+        "/used/",
+        "/store/search?s=demo"
+      ],
+      "terms": "/about/terms/",
+      "policy": "review_on_access",
+      "parser_validation": "blocked: no live listing fixtures"
+    },
+    {
+      "id": "musicians_friend",
+      "name": "Musician's Friend",
+      "tier": 1,
+      "base": "https://www.musiciansfriend.com",
+      "adapter": "musicians_friend",
+      "seeds": [
+        "/deals",
+        "/clearance"
+      ],
+      "terms": "/pages/terms-conditions",
+      "policy": "review_on_access",
+      "parser_validation": "blocked: no live listing fixtures"
+    },
+    {
+      "id": "zzounds",
+      "name": "zZounds",
+      "tier": 2,
+      "base": "https://www.zzounds.com",
+      "adapter": "zzounds",
+      "seeds": [
+        "/prodsearch?cat=2347&flags=sale,special&condition=New",
+        "/blowouts"
+      ],
+      "terms": "/info/terms",
+      "policy": "blocked",
+      "policy_reason": "Terms exclude data mining, robots and similar gathering tools; written permission needed."
+    },
+    {
+      "id": "ams",
+      "name": "American Musical Supply",
+      "tier": 2,
+      "base": "https://www.americanmusical.com",
+      "adapter": "generic",
+      "seeds": [
+        "/"
+      ],
+      "policy": "review_on_access",
+      "parser_validation": "robots returned 403"
+    },
+    {
+      "id": "alto",
+      "name": "Alto Music",
+      "tier": 2,
+      "base": "https://www.altomusic.com",
+      "adapter": "shopify",
+      "seeds": [
+        "/collections/on-sale",
+        "/pages/hot-deals"
+      ],
+      "terms": "/policies/terms-of-service",
+      "policy": "blocked",
+      "policy_reason": "Use license limits copying to temporary personal viewing and prohibits copying/mirroring materials; persistent inventory needs permission review."
+    },
+    {
+      "id": "focus",
+      "name": "Focus Pro Audio",
+      "tier": 2,
+      "base": "https://www.focusproaudio.com",
+      "adapter": "shopify",
+      "seeds": [
+        "/collections/all-deals"
+      ],
+      "terms": "/policies/terms-of-service",
+      "policy": "reviewed",
+      "terms_sha256": "c63e55b16b4dfbabe8b33aca3b0579cd1d2c30c7b8afe62db4c1de416e1486e9"
+    },
+    {
+      "id": "proaudiostar",
+      "name": "ProAudioStar",
+      "tier": 2,
+      "base": "https://www.proaudiostar.com",
+      "adapter": "magento",
+      "seeds": [
+        "/black-friday",
+        "/featured-deal.html"
+      ],
+      "terms": "/privacy-policy",
+      "policy": "reviewed",
+      "terms_sha256": "ca24acd8ffc811fb40d680a139b0d26c1727fee379c895abee68c2c3214bb9cb"
+    },
+    {
+      "id": "cme",
+      "name": "Chicago Music Exchange",
+      "tier": 2,
+      "base": "https://www.chicagomusicexchange.com",
+      "adapter": "shopify",
+      "seeds": [
+        "/collections/all-sale-items",
+        "/collections/deals-steals"
+      ],
+      "terms": "/pages/policies-and-terms",
+      "policy": "blocked",
+      "policy_reason": "Terms license permits copies incidental to normal browser/cache viewing only; persistent automated inventory needs permission review."
+    },
+    {
+      "id": "bh",
+      "name": "B&H Photo (music/pro audio)",
+      "tier": 3,
+      "base": "https://www.bhphotovideo.com",
+      "adapter": "generic",
+      "seeds": [
+        "/c/browse/Pro-Audio/ci/12154/N/4294550705"
+      ],
+      "policy": "review_on_access",
+      "parser_validation": "blocked homepage; music-only sale discovery unverified"
+    },
+    {
+      "id": "perfect_circuit",
+      "name": "Perfect Circuit",
+      "tier": 3,
+      "base": "https://www.perfectcircuit.com",
+      "adapter": "magento",
+      "seeds": [
+        "/sale.html"
+      ],
+      "policy": "review_on_access",
+      "parser_validation": "blocked homepage"
+    },
+    {
+      "id": "vintage_king",
+      "name": "Vintage King",
+      "tier": 3,
+      "base": "https://vintageking.com",
+      "adapter": "shopify",
+      "seeds": [
+        "/collections/black-friday-deals",
+        "/collections/black-friday-clearance",
+        "/collections/sale",
+        "/collections/sale-demo-deals"
+      ],
+      "terms": "/policies/terms-of-service",
+      "policy": "blocked",
+      "policy_reason": "Terms expressly prohibit robots, scraping and automated access."
+    },
+    {
+      "id": "pitbull",
+      "name": "Pitbull Audio",
+      "tier": 3,
+      "base": "https://www.pitbullaudio.com",
+      "adapter": "magento",
+      "seeds": [
+        "/on-sale.html",
+        "/on-sale/clearance.html",
+        "/deals/open-box.html",
+        "/deals.html"
+      ],
+      "policy": "reviewed",
+      "policy_reason": "No terms link exposed in inspected homepage; robots checked per request. Policy discovery remains a limitation."
+    },
+    {
+      "id": "kraft",
+      "name": "Kraft Music",
+      "tier": 3,
+      "base": "https://kraftmusic.com",
+      "adapter": "shopify",
+      "seeds": [
+        "/collections/deals-and-special-offers",
+        "/collections/demo-savings"
+      ],
+      "terms": "/policies/terms-of-service",
+      "policy": "blocked",
+      "policy_reason": "Terms prohibited uses include spider, crawl or scrape."
+    },
+    {
+      "id": "music_zoo",
+      "name": "The Music Zoo",
+      "tier": 3,
+      "base": "https://www.themusiczoo.com",
+      "adapter": "shopify",
+      "seeds": [
+        "/collections/sale",
+        "/collections/price-drops"
+      ],
+      "terms": "/policies/terms-of-service",
+      "policy": "blocked",
+      "policy_reason": "Terms prohibited uses include spider, crawl or scrape."
+    }
+  ]
+}

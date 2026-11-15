@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "music-deal-scraper"
+version = "0.1.0"
+description = "Evidence-first US music promotion inventory; zero inference calls"
+requires-python = ">=3.11"
+dependencies = ["httpx==0.28.1", "beautifulsoup4==4.14.2", "openpyxl==3.1.5"]
+
+[project.optional-dependencies]
+test = ["pytest==9.0.2"]
+
+[project.scripts]
+music-deals = "music_deals.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["music_deals*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
