@@ -35,7 +35,12 @@ class Robots:
                     except ValueError: pass
                 elif v: rules.append((k,v))
         specific=[g for g in groups if any(a!='*' and a in agent for a in g[0])]
-        selected=specific or [g for g in groups if '*' in g[0]]
+        if specific:
+            specificity=lambda g:max(len(a) for a in g[0] if a!='*' and a in agent)
+            longest=max(map(specificity,specific))
+            selected=[g for g in specific if specificity(g)==longest]
+        else:
+            selected=[g for g in groups if '*' in g[0]]
         self.rules=[r for g in selected for r in g[1]]
         self.delay=max([g[2] for g in selected]+[0])
 

@@ -138,6 +138,11 @@ def export(store,run,out):
         '- Browser-only collections remain unsupported where HTTP extraction provides no listing data. No CAPTCHA solving, proxy rotation or stealth browser is used.',
         '- Price checks occur over a crawl window, not a single atomic snapshot. Unknown availability should be checked before purchase.',
         '- Recurring scheduling is disabled. GitHub Actions artifacts expire after 30 days unless repository settings shorten that period. Download/archive snapshots you want to retain.','']
+    summary+=['','## Missing source fields','', '| Field | Offers missing the field |','|---|---:|']
+    for field in ('brand','manufacturer_model_number','retailer_sku','upc','condition','currency','availability','normal_advertised_price'):
+        missing=sum(o.get(field) is None for o in offers)
+        summary.append(f'| {field} | {missing:,} / {len(offers):,} |')
+    summary+=['','## Collection-specific gaps','']
     for c in coverage:
         if c['status']!='VERIFIED COMPLETE': summary.append(f"- {c['retailer']} — {c['url']}: **{c['status']}**. {c['reason']}")
     (out/'executive_summary.md').write_text('\n'.join(summary),encoding='utf-8')

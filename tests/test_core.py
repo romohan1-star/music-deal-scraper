@@ -38,6 +38,7 @@ def test_robots_wildcards_specific_agents_and_allow():
     assert not robots.allowed('https://r/private/public/foo')
     assert robots.delay==3
     assert not Robots('User-agent: *\nAllow: /\nUser-agent: MusicDealInventory\nDisallow: /').allowed('https://r/a')
+    assert not Robots('User-agent: Music\nAllow: /specific\nUser-agent: MusicDealInventory\nDisallow: /').allowed('https://r/specific')
 
 
 def test_access_block_stops_domain(tmp_path):
