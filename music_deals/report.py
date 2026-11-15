@@ -40,15 +40,17 @@ def relevance(o):
         score=45; reasons.append('Entry-level five-string option; upgrade value needs review')
     if 'bass' in text and re.search(r'\bacoustic\b|\ba/e\b|\bauditorium\b',text):
         score=min(score,45); reasons.append('Acoustic bass is secondary to electric-bass goals')
-    if re.search(r'\bfreeze (?:sound retainer|pedal)|\b22500 looper foot controller\b',text):
+    if re.search(r'\bfreeze (?:sound retainer|pedal)|\b22500 looper foot controller\b|\bbeam control\b.*controller',text):
         score=min(score,5); reasons.append('Redundant freeze function or requires an unowned host device')
     if 'expression pedal' in text and not re.search(r'\bmidi\b|gesture|pressure|ribbon',text):
         score=min(score,10); reasons.append('Basic expression control already covered')
+    if re.search(r'\bscarlett solo\b|\bssl 2\+|\bquantum creator bundle\b',text):
+        score=min(score,15); reasons.append('Small recording setup; expanded multi-instrument routing not established')
     if 'audio interface' in text and o.get('promotional_price') is not None and o['promotional_price']<250 and not re.search(r'4[ -]channel|8[ -]channel|multitrack|multi-track|digital mixer',text):
         score=min(score,15); reasons.append('Basic recording overlaps Anagram; expanded routing not established')
     if 'software' in text or re.search(r'\bsoundiron\b|\bsample (?:pack|library)\b',text):
         score=min(score,15); reasons.append('Sample/software purchase has lower priority than a new playing capability')
-    if 'bass' not in text and re.search(r'transacoustic|\bacoustic guitar\b|classical guitar',text):
+    if 'bass' not in text and re.search(r'transacoustic|\bacoustic(?:[ -]electric)?\b|classical guitar',text):
         score=min(score,15); reasons.append('Outside the electric-guitar upgrade focus')
     if not PROFILE.get('allow_left_handed',False) and re.search(r'left[ -]hand(?:ed)?|\blefty\b',text):
         score=0; reasons.append('Left-handed instrument excluded from personal shortlist')

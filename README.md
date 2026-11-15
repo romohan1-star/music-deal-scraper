@@ -158,6 +158,8 @@ price, condition, specifications and actual usefulness still need review.
    `music-deals-RUN_ID-ATTEMPT` artifact.
 4. Unzip and open `reports/deals.xlsx` or `reports/executive_summary.md`.
 
+**To rebuild reports without crawling:** choose **Actions → Refresh saved reports → Run workflow**. This restores the last full snapshot, rechecks saved product evidence, reruns ranking and validates the exports. It does not refresh collection timestamps or prices. Its artifact can also supply history for the next collection.
+
 The workflow also runs tests. Source changes pushed to `main` trigger a validation
 collection; branches and PRs run tests only. Runs are serialized and have a
 120-minute ceiling. Collection is interrupted at 100 minutes so report/data/log

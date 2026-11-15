@@ -251,6 +251,6 @@ def test_comparison_does_not_call_unknown_stock_in_stock():
 
 
 def test_real_shortlist_false_positives_are_demoted():
-    for title,price in [('Electro-Harmonix 22500 Looper Foot Controller',35.99),('Fender Link I O Audio Interface',89.95),('Electro-Harmonix Freeze Sound Retainer Pedal',129.99),('Soundiron Glitch Hero',49.5)]:
+    for title,price in [('Electro-Harmonix 22500 Looper Foot Controller',35.99),('Fender Link I O Audio Interface',89.95),('Electro-Harmonix Freeze Sound Retainer Pedal',129.99),('Soundiron Glitch Hero',49.5),('Blackstar Beam Control Wireless Foot Controller for Beam Amps',74.99),('Yamaha AC1R Acoustic-Electric Guitar',701.95),('Focusrite Scarlett Solo Studio Audio Interface',252.95)]:
         assert relevance({'product_title':title,'category':None,'promotional_price':price})[0]<25
     assert relevance({'product_title':'Sire Marcus Miller V7 4-String Fretless Bass','category':None,'promotional_price':700})[0]>=95
